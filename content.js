@@ -2,6 +2,10 @@ class YouTubeSubscriptionManager {
 	constructor() {
 		this.subscriptions = [];
 		this.isRunning = false;
+		this.shouldStop = false;
+		this.processedCount = 0;
+		this.failedCount = 0;
+		this.delayBetweenUnsubscribes = 2000;
 		Logger.log('YouTubeSubscriptionManager initialized');
 	}
 
@@ -133,26 +137,161 @@ class YouTubeSubscriptionManager {
 		});
 	}
 
+	stopUnsubscribing() {
+		Logger.log('Stop requested by user');
+		this.shouldStop = true;
+		this.isRunning = false;
+		document.getElementById('yt-stop-unsub').disabled = true;
+		document.getElementById('yt-start-unsub').disabled = false;
+		document.getElementById('yt-status').textContent = 'Stopped';
+	}
+
 	async startUnsubscribing() {
 		if (this.isRunning || this.subscriptions.length === 0) return;
 
 		this.isRunning = true;
+		this.shouldStop = false;
+		this.processedCount = 0;
+		this.failedCount = 0;
+
 		document.getElementById('yt-stop-unsub').disabled = false;
 		document.getElementById('yt-start-unsub').disabled = true;
 
 		Logger.log('Starting unsubscribe process');
-		// Actual unsubscribe functionality will be implemented in the next step
+
+		try {
+			await this.processSubscriptions();
+		} catch (error) {
+			ErrorHandler.handle(error, 'startUnsubscribing');
+		}
 	}
 
-	stopUnsubscribing() {
+	async processSubscriptions() {
+		const status = document.getElementById('yt-status');
+		const count = document.getElementById('yt-count');
+
+		for (let i = 0; i < this.subscriptions.length; i++) {
+			if (this.shouldStop) {
+				Logger.log('Unsubscribe process stopped by user');
+				break;
+			}
+
+			const sub = this.subscriptions[i];
+			status.textContent = `Processing ${i + 1}/${this.subscriptions.length}`;
+
+			try {
+				await this.unsubscribeFromChannel(sub);
+				this.processedCount++;
+				Logger.log(`Successfully unsubscribed ${this.processedCount}/${this.subscriptions.length}`);
+			} catch (error) {
+				if (this.shouldStop) break;
+				this.failedCount++;
+				ErrorHandler.handle(error, 'processSubscriptions');
+			}
+
+			count.textContent = `Processed: ${this.processedCount}, Failed: ${this.failedCount}`;
+
+			if (this.shouldStop) break;
+			await this.delay(this.delayBetweenUnsubscribes);
+		}
+
 		this.isRunning = false;
 		document.getElementById('yt-stop-unsub').disabled = true;
-		document.getElementById('yt-start-unsub').disabled = false;
+		status.textContent = this.shouldStop ? 'Stopped' : 'Completed';
+		Logger.log('Unsubscribe process ended');
+	}
 
-		const status = document.getElementById('yt-status');
-		status.textContent = 'Stopped';
+	async unsubscribeFromChannel(channelElement) {
+		if (this.shouldStop) throw new Error('Process stopped by user');
 
-		Logger.log('Unsubscribe process stopped by user');
+		return await ErrorHandler.wrapAsync(async () => {
+			const channelName = channelElement.querySelector('#channel-title')?.textContent || 'Unknown Channel';
+			Logger.log(`Unsubscribing from: ${channelName}`);
+
+			const subscribeButton = await this.findSubscribeButton(channelElement);
+			if (!subscribeButton) {
+				throw new Error('Subscribe button not found');
+			}
+
+			if (this.shouldStop) throw new Error('Process stopped by user');
+			subscribeButton.click();
+			await this.delay(1000);
+
+			if (this.shouldStop) throw new Error('Process stopped by user');
+			const unsubConfirmButton = await this.findUnsubscribeConfirmButton();
+			if (!unsubConfirmButton) {
+				throw new Error('Unsubscribe confirm button not found');
+			}
+
+			if (this.shouldStop) throw new Error('Process stopped by user');
+			unsubConfirmButton.click();
+			await this.delay(500);
+
+			return true;
+		}, 'unsubscribeFromChannel');
+	}
+
+	async findSubscribeButton(channelElement) {
+		let attempts = 0;
+		const maxAttempts = 5;
+
+		while (attempts < maxAttempts) {
+			const button = channelElement.querySelector('#subscribe-button button');
+			if (button) return button;
+
+			await this.delay(500);
+			attempts++;
+		}
+
+		return null;
+	}
+
+	async findUnsubscribeConfirmButton() {
+		let attempts = 0;
+		const maxAttempts = 5;
+
+		while (attempts < maxAttempts) {
+			// Look for the confirmation dialog button
+			const buttons = Array.from(document.querySelectorAll('yt-confirm-dialog-renderer button'));
+			const confirmButton = buttons.find(button =>
+				button.textContent.toLowerCase().includes('unsubscribe'));
+
+			if (confirmButton) return confirmButton;
+
+			await this.delay(500);
+			attempts++;
+		}
+
+		return null;
+	}
+
+	delay(ms) {
+		return new Promise(resolve => setTimeout(resolve, ms));
+	}
+
+	saveProgress() {
+		const progress = {
+			processedCount: this.processedCount,
+			failedCount: this.failedCount,
+			timestamp: new Date().toISOString()
+		};
+
+		chrome.storage.local.set({ unsubscribeProgress: progress }, () => {
+			Logger.log('Progress saved');
+		});
+	}
+
+	async loadProgress() {
+		return new Promise((resolve) => {
+			chrome.storage.local.get(['unsubscribeProgress'], (result) => {
+				if (result.unsubscribeProgress) {
+					Logger.log('Previous progress loaded');
+					resolve(result.unsubscribeProgress);
+				} else {
+					resolve(null);
+				}
+			});
+		});
 	}
 }
 
