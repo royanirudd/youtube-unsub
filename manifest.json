@@ -1,0 +1,18 @@
+{
+  "manifest_version": 2,
+  "name": "YouTube Subscription Cleaner",
+  "version": "1.0",
+  "description": "Safely remove YouTube subscriptions",
+  "permissions": [
+    "https://www.youtube.com/*",
+    "storage"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "content_scripts": [{
+    "matches": ["https://www.youtube.com/*"],
+    "js": ["utils/logger.js", "utils/errorHandler.js", "content.js"]
+  }]
+}
