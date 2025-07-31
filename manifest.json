@@ -1,18 +1,27 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "YouTube Subscription Cleaner",
-  "version": "1.0",
-  "description": "Safely remove YouTube subscriptions",
+  "version": "1.1",
+  "description": "Selectively or bulk unsubscribe from YouTube channels.",
   "permissions": [
-    "https://www.youtube.com/*",
-    "storage"
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*"
   ],
   "background": {
-    "scripts": ["background.js"],
-    "persistent": false
+    "scripts": ["utils/logger.js", "background.js"]
   },
   "content_scripts": [{
     "matches": ["https://www.youtube.com/*"],
     "js": ["utils/logger.js", "utils/errorHandler.js", "content.js"]
-  }]
+  }],
+  "web_accessible_resources": [{
+    "resources": ["manager/manager.html", "manager/manager.js"],
+    "matches": ["<all_urls>"]
+  }],
+  "action": {
+    "default_title": "YouTube Subscription Cleaner"
+  }
 }

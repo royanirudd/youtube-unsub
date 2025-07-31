@@ -1,22 +1,17 @@
 class ErrorHandler {
 	static handle(error, context) {
-		Logger.error(`Error in ${context}`, error);
-
-		// You can customize error handling based on error types
-		if (error instanceof TypeError) {
-			return { success: false, message: 'Invalid operation performed' };
-		}
-
-		return { success: false, message: 'An unexpected error occurred' };
+		const timestamp = new Date().toISOString();
+		console.error(`[${timestamp}] [error]: Error in ${context}:`, error.message);
+		console.error(error);
+		Logger.log(`[error]: Error in ${context}: ${error.message}`);
 	}
 
-	static async wrapAsync(fn, context) {
+	static async wrapAsync(asyncFn, context) {
 		try {
-			return await fn();
+			return await asyncFn();
 		} catch (error) {
-			return this.handle(error, context);
+			this.handle(error, context);
+			throw error;
 		}
 	}
 }
-
-window.ErrorHandler = ErrorHandler;
